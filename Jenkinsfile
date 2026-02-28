@@ -18,48 +18,58 @@ pipeline {
 
     stage("Clean Up") {
       steps {
-        sh "docker compose down --remove-orphans || true"
+        bat "docker compose down --remove-orphans || exit /b 0"
       }
     }
 
     stage("Build Images") {
       steps {
-        sh "docker compose build"
+        bat "docker compose build"
       }
     }
 
     stage("Start Databases") {
       steps {
-        sh "docker compose up -d mysql mongo"
-        sh """
-          echo "Waiting for MySQL..."
-          until docker compose exec -T mysql mysqladmin ping -h 127.0.0.1 -proot >/dev/null 2>&1; do
-            sleep 2
-          done
-          echo "Waiting for Mongo..."
-          until docker compose exec -T mongo mongosh --eval 'db.runCommand({ ping: 1 })' >/dev/null 2>&1; do
-            sleep 2
-          done
-        """
+        bat "docker compose up -d mysql mongo"
+        powershell '''
+          $ErrorActionPreference = "Stop"
+          Write-Host "Waiting for MySQL..."
+          $ready = $false
+          for ($i = 0; $i -lt 60; $i++) {
+            docker compose exec -T mysql mysqladmin ping -h 127.0.0.1 -proot | Out-Null
+            if ($LASTEXITCODE -eq 0) { $ready = $true; break }
+            Start-Sleep -Seconds 2
+          }
+          if (-not $ready) { throw "MySQL not ready" }
+
+          Write-Host "Waiting for Mongo..."
+          $ready = $false
+          for ($i = 0; $i -lt 60; $i++) {
+            docker compose exec -T mongo mongosh --eval "db.runCommand({ ping: 1 })" | Out-Null
+            if ($LASTEXITCODE -eq 0) { $ready = $true; break }
+            Start-Sleep -Seconds 2
+          }
+          if (-not $ready) { throw "Mongo not ready" }
+        '''
       }
     }
 
     stage("Run Tests") {
       steps {
-        sh "docker compose run --rm backend pytest -q"
+        bat "docker compose run --rm backend pytest -q"
       }
     }
 
     stage("Start Full Stack") {
       steps {
-        sh "docker compose up -d"
+        bat "docker compose up -d"
       }
     }
   }
 
   post {
     always {
-      sh "docker compose ps"
+      bat "docker compose ps"
     }
     success {
       echo "Frontend: http://<JENKINS_AGENT_HOST>:3000"
