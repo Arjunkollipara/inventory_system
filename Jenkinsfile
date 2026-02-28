@@ -21,6 +21,8 @@ pipeline {
     stage("Clean Up") {
       steps {
         bat "docker compose down --remove-orphans || exit /b 0"
+        docker rm -f inventory_mongo inventory_mysql inventory_backend inventory_frontend || exit /b 0
+        //bat "docker rm -f inventory_mongo inventory_mysql inventory_backend inventory_frontend || exit /b 0"
       }
     }
 
