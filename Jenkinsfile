@@ -7,6 +7,8 @@ pipeline {
 
   environment {
     COMPOSE_PROJECT_NAME = "inventory"
+    DOCKER_CLIENT_TIMEOUT = "180"
+    COMPOSE_HTTP_TIMEOUT = "180"
   }
 
   stages {
@@ -22,9 +24,36 @@ pipeline {
       }
     }
 
+    stage("Pre-pull Base Images") {
+      steps {
+        powershell '''
+          $ErrorActionPreference = "Stop"
+          $images = @(
+            "python:3.10-slim",
+            "node:20-alpine",
+            "nginx:1.27-alpine",
+            "mysql:8",
+            "mongo:6"
+          )
+          foreach ($image in $images) {
+            Write-Host "Pulling $image..."
+            $pulled = $false
+            for ($i = 0; $i -lt 5; $i++) {
+              docker pull $image | Out-Host
+              if ($LASTEXITCODE -eq 0) { $pulled = $true; break }
+              Start-Sleep -Seconds 5
+            }
+            if (-not $pulled) { throw "Failed to pull $image" }
+          }
+        '''
+      }
+    }
+
     stage("Build Images") {
       steps {
-        bat "docker compose build"
+        retry(3) {
+          bat "docker compose build"
+        }
       }
     }
 
