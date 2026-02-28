@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from typing import List
 from ..database import get_db
 from ..models import Order, OrderItem, Product, Inventory
 from ..schemas.order import OrderCreate, OrderResponse
 from ..mongo import logs_collection
 from datetime import datetime
-from fastapi import Query
 
 router = APIRouter()
 
@@ -22,6 +22,11 @@ def get_logs(start_date: str = None, end_date: str = None):
 
     logs = list(logs_collection.find(query, {"_id": 0}))
     return logs
+
+
+@router.get("/orders", response_model=List[OrderResponse])
+def list_orders(db: Session = Depends(get_db)):
+    return db.query(Order).order_by(Order.id.desc()).all()
 
 
 @router.post("/orders", response_model=OrderResponse)
